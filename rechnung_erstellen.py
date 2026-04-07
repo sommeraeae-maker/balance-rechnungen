@@ -227,15 +227,15 @@ def erstelle_pdf_bytes(
         rechnungsdatum=rechnungsdatum,
     )
 
-    # Briefbogen laden und Ebene zusammenführen
+    # Briefbogen laden und Seite zuerst dem Writer zuweisen
     briefbogen = PdfReader(TEMPLATE_PDF)
-    seite = briefbogen.pages[0]
+    writer = PdfWriter()
+    writer.add_page(briefbogen.pages[0])
+    # Ebene auf die bereits zugewiesene Seite mergen
     ebene_pdf = PdfReader(BytesIO(ebene_bytes))
-    seite.merge_page(ebene_pdf.pages[0])
+    writer.pages[0].merge_page(ebene_pdf.pages[0])
 
     # Fertige PDF als Bytes zurückgeben (keine Datei schreiben)
-    writer = PdfWriter()
-    writer.add_page(seite)
     puffer = BytesIO()
     writer.write(puffer)
     return puffer.getvalue()
@@ -278,18 +278,14 @@ def erstelle_rechnung(
         rechnungsdatum=heute,
     )
 
-    # Briefbogen laden
+    # Briefbogen laden und zuerst dem Writer zuweisen
     briefbogen = PdfReader(TEMPLATE_PDF)
-    seite = briefbogen.pages[0]
+    writer = PdfWriter()
+    writer.add_page(briefbogen.pages[0])
 
     # Ebene einlesen und zusammenführen
     ebene_pdf = PdfReader(BytesIO(ebene_bytes))
-    ebene_seite = ebene_pdf.pages[0]
-    seite.merge_page(ebene_seite)
-
-    # Speichern
-    writer = PdfWriter()
-    writer.add_page(seite)
+    writer.pages[0].merge_page(ebene_pdf.pages[0])
 
     # Dateiname: RE-2026-001_Kundenname.pdf
     sicherer_name = empfaenger_name.replace(" ", "_").replace("/", "-").replace("\\", "-")
