@@ -91,11 +91,17 @@ def zeige_formular(repo):
         vorbelegung_adr2 = ""
         vorbelegung_leistung = ""
     else:
-        vorbelegung_name = kunde.get("name", "")
-        adr = kunde.get("adresse", ["", ""])
-        vorbelegung_adr1 = adr[0] if len(adr) > 0 else ""
-        vorbelegung_adr2 = adr[1] if len(adr) > 1 else ""
-        vorbelegung_leistung = ""  # wird unten gesetzt
+        if kunde:
+            vorbelegung_name = kunde.get("name", "")
+            adr = kunde.get("adresse", ["", ""])
+            vorbelegung_adr1 = adr[0] if len(adr) > 0 else ""
+            vorbelegung_adr2 = adr[1] if len(adr) > 1 else ""
+            vorbelegung_leistung = ""  # wird unten gesetzt
+        else:
+            vorbelegung_name = ""
+            vorbelegung_adr1 = ""
+            vorbelegung_adr2 = ""
+            vorbelegung_leistung = ""
 
     # ── Leistungstext-Bestätigung bei bestehendem Kunden ──
     if st.session_state.empfaenger_modus == "bestehend" and st.session_state.leistung_bestaetigt is None:
@@ -199,6 +205,7 @@ def zeige_formular(repo):
                     st.session_state.empfaenger_modus = None
                     st.session_state.ausgewaehlter_kunde = None
                     st.session_state.leistung_bestaetigt = None
+                    st.rerun()
 
                 except Exception as e:
                     st.error(f"Fehler: {e}")
