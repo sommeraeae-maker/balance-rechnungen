@@ -209,7 +209,7 @@ def erstelle_pdf_bytes(
     mwst_betrag: float,
     brutto: float,
     rechnungsnummer: str,
-    rechnungsdatum,
+    rechnungsdatum: date,
 ) -> bytes:
     """Erstellt die fertige Rechnung als PDF-Bytes.
     Keine Seiteneffekte: kein Zähler, keine Datei wird geschrieben.
