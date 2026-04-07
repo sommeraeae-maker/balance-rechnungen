@@ -76,6 +76,134 @@ def zeige_kunden_auswahl(repo):
         st.rerun()
 
 
+def zeige_formular(repo):
+    """Zeigt das Rechnungsformular und verarbeitet die Erstellung."""
+    st.title("BALANCE Vital-Lounge")
+    st.subheader("Rechnung erstellen")
+    st.divider()
+
+    kunde = st.session_state.ausgewaehlter_kunde
+
+    # ── Vorausfüllen je nach Modus ──
+    if st.session_state.empfaenger_modus == "neu":
+        vorbelegung_name = ""
+        vorbelegung_adr1 = ""
+        vorbelegung_adr2 = ""
+        vorbelegung_leistung = ""
+    else:
+        vorbelegung_name = kunde.get("name", "")
+        adr = kunde.get("adresse", ["", ""])
+        vorbelegung_adr1 = adr[0] if len(adr) > 0 else ""
+        vorbelegung_adr2 = adr[1] if len(adr) > 1 else ""
+        vorbelegung_leistung = ""  # wird unten gesetzt
+
+    # ── Leistungstext-Bestätigung bei bestehendem Kunden ──
+    if st.session_state.empfaenger_modus == "bestehend" and st.session_state.leistung_bestaetigt is None:
+        letzte = kunde.get("letzte_leistung", "")
+        if letzte:
+            st.info(f"**Letzter Rechnungstext:**\n\n_{letzte}_")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Ja, gleicher Text"):
+                    st.session_state.leistung_bestaetigt = True
+                    st.rerun()
+            with col2:
+                if st.button("✏️ Nein, neu schreiben"):
+                    st.session_state.leistung_bestaetigt = False
+                    st.rerun()
+            return
+        else:
+            st.session_state.leistung_bestaetigt = False
+
+    # Leistungstext festlegen
+    if st.session_state.empfaenger_modus == "bestehend" and st.session_state.leistung_bestaetigt:
+        vorbelegung_leistung = kunde.get("letzte_leistung", "")
+    else:
+        vorbelegung_leistung = ""
+
+    # ── Formularfelder ──
+    name = st.text_input("Empfängername *", value=vorbelegung_name)
+    adr1 = st.text_input("Adresszeile 1 *", value=vorbelegung_adr1)
+    adr2 = st.text_input("Adresszeile 2 *", value=vorbelegung_adr2)
+    leistung = st.text_area("Leistungsbeschreibung *", value=vorbelegung_leistung, height=100)
+    betrag = st.number_input("Betrag (€) *", min_value=0.01, step=0.01, format="%.2f")
+    modus = st.radio("Betrag ist:", ["Netto (+ 19% MwSt)", "Brutto (inkl. MwSt)"])
+
+    st.divider()
+
+    col_zurueck, col_erstellen = st.columns([1, 2])
+    with col_zurueck:
+        if st.button("← Zurück"):
+            st.session_state.empfaenger_modus = None
+            st.session_state.ausgewaehlter_kunde = None
+            st.session_state.leistung_bestaetigt = None
+            st.rerun()
+
+    with col_erstellen:
+        if st.button("🧾 Rechnung erstellen", type="primary", use_container_width=True):
+            # Pflichtfelder prüfen
+            if not all([name, adr1, adr2, leistung, betrag]):
+                st.error("Bitte alle Felder ausfüllen.")
+                return
+
+            ist_brutto = "Brutto" in modus
+
+            # MwSt berechnen
+            if ist_brutto:
+                brutto = betrag
+                netto = round(brutto / 1.19, 2)
+                mwst_betrag = round(brutto - netto, 2)
+            else:
+                netto = betrag
+                mwst_betrag = round(netto * 0.19, 2)
+                brutto = round(netto + mwst_betrag, 2)
+
+            with st.spinner("Rechnung wird erstellt..."):
+                try:
+                    # Rechnungsnummer aus GitHub lesen
+                    rechnungsnummer = lese_naechste_nummer(repo)
+
+                    # PDF erstellen
+                    pdf_bytes = erstelle_pdf_bytes(
+                        empfaenger_name=name,
+                        empfaenger_adresse=[adr1, adr2],
+                        leistung=leistung,
+                        netto=netto,
+                        mwst_betrag=mwst_betrag,
+                        brutto=brutto,
+                        rechnungsnummer=rechnungsnummer,
+                        rechnungsdatum=date.today(),
+                    )
+
+                    # Counter in GitHub speichern
+                    schreibe_counter(repo, rechnungsnummer)
+
+                    # Kundendaten speichern/aktualisieren
+                    speichere_kunde(repo, name, [adr1, adr2], leistung)
+
+                    # E-Mail verschicken
+                    sende_rechnung(
+                        pdf_bytes=pdf_bytes,
+                        rechnungsnummer=rechnungsnummer,
+                        empfaenger_name=name,
+                        gmail_absender=st.secrets["GMAIL_ABSENDER"],
+                        gmail_passwort=st.secrets["GMAIL_APP_PASSWORT"],
+                    )
+
+                    st.success(
+                        f"✅ Rechnung **{rechnungsnummer}** wurde erfolgreich an "
+                        f"umohr@balance-sonnenstudio.de geschickt."
+                    )
+
+                    # Session zurücksetzen für nächste Rechnung
+                    st.session_state.empfaenger_modus = None
+                    st.session_state.ausgewaehlter_kunde = None
+                    st.session_state.leistung_bestaetigt = None
+
+                except Exception as e:
+                    st.error(f"Fehler: {e}")
+
+
 # ── Haupt-Routing ──
 if not st.session_state.eingeloggt:
     zeige_login()
@@ -85,5 +213,5 @@ elif st.session_state.empfaenger_modus == "bestehend" and st.session_state.ausge
     repo = verbinde_repo(st.secrets["GITHUB_TOKEN"], st.secrets["GITHUB_REPO"])
     zeige_kunden_auswahl(repo)
 else:
-    # Formular wird in Task 6 ergänzt
-    st.info("Formular folgt in Task 6...")
+    repo = verbinde_repo(st.secrets["GITHUB_TOKEN"], st.secrets["GITHUB_REPO"])
+    zeige_formular(repo)
