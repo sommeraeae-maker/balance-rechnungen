@@ -1,6 +1,7 @@
 # GitHub-Dienst: Zähler und Kundendaten aus dem GitHub-Repo lesen und schreiben
 import json
 from datetime import date
+from github import GithubException
 
 
 def verbinde_repo(github_token: str, repo_name: str):
@@ -45,8 +46,10 @@ def lese_kunden(repo) -> list:
     """Liest alle Kunden-JSON-Dateien aus Kunden/ und gibt sie als Liste zurück."""
     try:
         dateien = repo.get_contents("Kunden")
-    except Exception:
-        return []
+    except GithubException as e:
+        if e.status == 404:
+            return []
+        raise
 
     kunden = []
     for datei in dateien:
@@ -60,7 +63,8 @@ def lese_kunden(repo) -> list:
 
 def speichere_kunde(repo, name: str, adresse: list, letzte_leistung: str):
     """Legt einen neuen Kunden an oder aktualisiert den bestehenden in Kunden/."""
-    sicherer_name = name.replace(" ", "_").replace("/", "-").replace("\\", "-")
+    import re
+    sicherer_name = re.sub(r'[^\w\-]', '_', name)
     pfad = f"Kunden/{sicherer_name}.json"
 
     inhalt = {
@@ -78,7 +82,9 @@ def speichere_kunde(repo, name: str, adresse: list, letzte_leistung: str):
             content=inhalt_str,
             sha=bestehend.sha,
         )
-    except Exception:
+    except GithubException as e:
+        if e.status != 404:
+            raise
         repo.create_file(
             path=pfad,
             message=f"Neuer Kunde angelegt: {name}",
