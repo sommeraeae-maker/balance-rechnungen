@@ -1,0 +1,13 @@
+# Fertige Rechnungen nicht ins Repo (enthält personenbezogene Daten)
+Fertige Rechnungen/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Streamlit lokale Secrets
+.streamlit/secrets.toml
