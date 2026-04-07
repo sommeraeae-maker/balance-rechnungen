@@ -201,6 +201,46 @@ def erstelle_rechnungsebene(
     return puffer.getvalue()
 
 
+def erstelle_pdf_bytes(
+    empfaenger_name: str,
+    empfaenger_adresse: list[str],
+    leistung: str,
+    netto: float,
+    mwst_betrag: float,
+    brutto: float,
+    rechnungsnummer: str,
+    rechnungsdatum,
+) -> bytes:
+    """Erstellt die fertige Rechnung als PDF-Bytes.
+    Keine Seiteneffekte: kein Zähler, keine Datei wird geschrieben.
+    Wird von der Streamlit-Web-App verwendet."""
+
+    # Rechnungsinhalt als transparente Ebene erzeugen
+    ebene_bytes = erstelle_rechnungsebene(
+        empfaenger_name=empfaenger_name,
+        empfaenger_adresse=empfaenger_adresse,
+        leistung=leistung,
+        netto=netto,
+        mwst_betrag=mwst_betrag,
+        brutto=brutto,
+        rechnungsnummer=rechnungsnummer,
+        rechnungsdatum=rechnungsdatum,
+    )
+
+    # Briefbogen laden und Ebene zusammenführen
+    briefbogen = PdfReader(TEMPLATE_PDF)
+    seite = briefbogen.pages[0]
+    ebene_pdf = PdfReader(BytesIO(ebene_bytes))
+    seite.merge_page(ebene_pdf.pages[0])
+
+    # Fertige PDF als Bytes zurückgeben (keine Datei schreiben)
+    writer = PdfWriter()
+    writer.add_page(seite)
+    puffer = BytesIO()
+    writer.write(puffer)
+    return puffer.getvalue()
+
+
 def erstelle_rechnung(
     empfaenger_name: str,
     empfaenger_adresse: list[str],
