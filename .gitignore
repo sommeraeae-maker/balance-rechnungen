@@ -11,3 +11,4 @@ __pycache__/
 
 # Streamlit lokale Secrets
 .streamlit/secrets.toml
+Kunden/
