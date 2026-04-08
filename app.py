@@ -21,6 +21,8 @@ if "ausgewaehlter_kunde" not in st.session_state:
     st.session_state.ausgewaehlter_kunde = None
 if "leistung_bestaetigt" not in st.session_state:
     st.session_state.leistung_bestaetigt = None  # True/False/None
+if "letzte_rechnungsnummer" not in st.session_state:
+    st.session_state.letzte_rechnungsnummer = None
 
 
 def zeige_login():
@@ -56,6 +58,7 @@ def zeige_empfaenger_auswahl():
 
 def zeige_kunden_auswahl(repo):
     """Zeigt die Liste der bestehenden Kunden zur Auswahl."""
+    st.title("BALANCE Vital-Lounge")
     st.subheader("Kunden auswählen")
     kunden = lese_kunden(repo)
 
@@ -181,13 +184,7 @@ def zeige_formular(repo):
                         rechnungsdatum=date.today(),
                     )
 
-                    # Counter in GitHub speichern
-                    schreibe_counter(repo, rechnungsnummer)
-
-                    # Kundendaten speichern/aktualisieren
-                    speichere_kunde(repo, name, [adr1, adr2], leistung)
-
-                    # E-Mail verschicken
+                    # E-Mail zuerst verschicken – Counter nur bei Erfolg hochzählen
                     sende_rechnung(
                         pdf_bytes=pdf_bytes,
                         rechnungsnummer=rechnungsnummer,
@@ -196,12 +193,14 @@ def zeige_formular(repo):
                         gmail_passwort=st.secrets["GMAIL_APP_PASSWORT"],
                     )
 
-                    st.success(
-                        f"✅ Rechnung **{rechnungsnummer}** wurde erfolgreich an "
-                        f"umohr@balance-sonnenstudio.de geschickt."
-                    )
+                    # Counter in GitHub speichern (erst nach erfolgreicher Mail)
+                    schreibe_counter(repo, rechnungsnummer)
 
-                    # Session zurücksetzen für nächste Rechnung
+                    # Kundendaten speichern/aktualisieren (erst nach Erfolg)
+                    speichere_kunde(repo, name, [adr1, adr2], leistung)
+
+                    # Erfolgsnummer speichern und Session zurücksetzen
+                    st.session_state.letzte_rechnungsnummer = rechnungsnummer
                     st.session_state.empfaenger_modus = None
                     st.session_state.ausgewaehlter_kunde = None
                     st.session_state.leistung_bestaetigt = None
@@ -211,9 +210,25 @@ def zeige_formular(repo):
                     st.error(f"Fehler: {e}")
 
 
+def zeige_erfolg():
+    """Zeigt die Bestätigungsseite nach erfolgreicher Rechnungserstellung."""
+    st.title("BALANCE Vital-Lounge")
+    st.divider()
+    nummer = st.session_state.letzte_rechnungsnummer
+    st.success(
+        f"✅ Rechnung **{nummer}** wurde erfolgreich an "
+        f"umohr@balance-sonnenstudio.de geschickt."
+    )
+    if st.button("Neue Rechnung erstellen"):
+        st.session_state.letzte_rechnungsnummer = None
+        st.rerun()
+
+
 # ── Haupt-Routing ──
 if not st.session_state.eingeloggt:
     zeige_login()
+elif st.session_state.letzte_rechnungsnummer is not None:
+    zeige_erfolg()
 elif st.session_state.empfaenger_modus is None:
     zeige_empfaenger_auswahl()
 elif st.session_state.empfaenger_modus == "bestehend" and st.session_state.ausgewaehlter_kunde is None:
