@@ -1,5 +1,6 @@
-# GitHub-Dienst: Zähler und Kundendaten aus dem GitHub-Repo lesen und schreiben
+# GitHub-Dienst: Zähler, Kundendaten und Fertige Rechnungen aus dem GitHub-Repo
 import json
+import re
 from datetime import date
 from github import GithubException
 
@@ -63,7 +64,6 @@ def lese_kunden(repo) -> list:
 
 def speichere_kunde(repo, name: str, adresse: list, letzte_leistung: str):
     """Legt einen neuen Kunden an oder aktualisiert den bestehenden in Kunden/."""
-    import re
     sicherer_name = re.sub(r'[^\w\-]', '_', name)
     pfad = f"Kunden/{sicherer_name}.json"
 
@@ -90,3 +90,118 @@ def speichere_kunde(repo, name: str, adresse: list, letzte_leistung: str):
             message=f"Neuer Kunde angelegt: {name}",
             content=inhalt_str,
         )
+
+
+def speichere_fertige_rechnung(
+    repo, pdf_bytes: bytes, rechnungsnummer: str,
+    empfaenger_name: str, adresse: list, leistung: str,
+    netto: float, mwst_betrag: float, brutto: float, datum
+):
+    """Speichert PDF und Metadaten-JSON in Fertige_Rechnungen/ im GitHub-Repo."""
+    sicherer_name = re.sub(r'[^\w\-]', '_', empfaenger_name)
+    basis = f"{rechnungsnummer}_{sicherer_name}"
+    pdf_pfad = f"Fertige_Rechnungen/{basis}.pdf"
+    json_pfad = f"Fertige_Rechnungen/{basis}.json"
+
+    datum_str = datum.isoformat() if hasattr(datum, 'isoformat') else str(datum)
+    meta = {
+        "rechnungsnummer": rechnungsnummer,
+        "empfaenger_name": empfaenger_name,
+        "adresse": adresse,
+        "leistung": leistung,
+        "netto": netto,
+        "mwst_betrag": mwst_betrag,
+        "brutto": brutto,
+        "datum": datum_str,
+        "pdf_datei": f"{basis}.pdf",
+    }
+    meta_str = json.dumps(meta, indent=2, ensure_ascii=False)
+
+    # PDF und Metadaten speichern (anlegen oder überschreiben)
+    for pfad, inhalt in [(pdf_pfad, pdf_bytes), (json_pfad, meta_str)]:
+        try:
+            bestehend = repo.get_contents(pfad)
+            repo.update_file(
+                path=pfad,
+                message=f"Rechnung {rechnungsnummer} gespeichert",
+                content=inhalt,
+                sha=bestehend.sha,
+            )
+        except GithubException as e:
+            if e.status != 404:
+                raise
+            repo.create_file(
+                path=pfad,
+                message=f"Rechnung {rechnungsnummer} gespeichert",
+                content=inhalt,
+            )
+
+
+def lese_fertige_rechnungen(repo) -> list:
+    """Liest alle Metadaten-JSONs aus Fertige_Rechnungen/ und gibt sie sortiert zurück
+    (neueste zuerst)."""
+    try:
+        dateien = repo.get_contents("Fertige_Rechnungen")
+    except GithubException as e:
+        if e.status == 404:
+            return []
+        raise
+
+    rechnungen = []
+    for datei in dateien:
+        if datei.name.endswith(".json"):
+            try:
+                meta = json.loads(datei.decoded_content)
+                rechnungen.append(meta)
+            except Exception:
+                pass
+
+    return sorted(rechnungen, key=lambda r: r.get("rechnungsnummer", ""), reverse=True)
+
+
+def loesche_rechnung(repo, rechnungsnummer: str):
+    """Löscht PDF und JSON einer Rechnung aus Fertige_Rechnungen/ und setzt den Counter
+    auf den höchsten verbleibenden Wert zurück."""
+    try:
+        dateien = repo.get_contents("Fertige_Rechnungen")
+    except GithubException as e:
+        if e.status == 404:
+            return
+        raise
+
+    # Verbleibende Nummern BEVOR wir löschen berechnen
+    aktuelles_jahr = date.today().year
+    verbleibende_nummern = []
+    zu_loeschen = []
+
+    for datei in dateien:
+        if datei.name.startswith(rechnungsnummer + "_"):
+            zu_loeschen.append(datei)
+        elif datei.name.endswith(".json"):
+            try:
+                meta = json.loads(datei.decoded_content)
+                nr = meta.get("rechnungsnummer", "")
+                teile = nr.split("-")
+                if len(teile) == 3 and int(teile[1]) == aktuelles_jahr:
+                    verbleibende_nummern.append(int(teile[2]))
+            except Exception:
+                pass
+
+    # Dateien löschen
+    for datei in zu_loeschen:
+        repo.delete_file(
+            path=datei.path,
+            message=f"Rechnung {rechnungsnummer} gelöscht",
+            sha=datei.sha,
+        )
+
+    # Counter auf höchste verbleibende Nummer setzen
+    hoechste = max(verbleibende_nummern) if verbleibende_nummern else 0
+    neue_daten = {"letzteNummer": hoechste, "jahr": aktuelles_jahr}
+    counter_datei = repo.get_contents("counter.json")
+    repo.update_file(
+        path="counter.json",
+        message=f"Counter nach Löschung von {rechnungsnummer} auf {hoechste} gesetzt",
+        content=json.dumps(neue_daten, indent=2, ensure_ascii=False),
+        sha=counter_datei.sha,
+    )
