@@ -1,0 +1,14 @@
+{
+  "rechnungsnummer": "RE-2026-010",
+  "empfaenger_name": "relounge-ATHLETICO GmbH",
+  "adresse": [
+    "Aachener Str. 26",
+    "40223 Düsseldorf"
+  ],
+  "leistung": "Marketing und Kooperationsvereinbarung im Rahmen der relounge-Partnerschaft gemäß Vereinbarung vom 11.03.2026",
+  "netto": 0.01,
+  "mwst_betrag": 0.0,
+  "brutto": 0.01,
+  "datum": "2026-06-29",
+  "pdf_datei": "RE-2026-010_relounge-ATHLETICO_GmbH.pdf"
+}
